@@ -4,6 +4,23 @@
 
 $Host.UI.RawUI.WindowTitle = 'Оптимизация и очистка компьютера'
 
+# В обычной консоли щелчок мышью по окну включает выделение и ставит программу на паузу,
+# из-за чего долгие проверки выглядят зависшими. Отключаем это для нашего окна.
+try {
+    Add-Type -Namespace OptimizeDota -Name ConsoleMode -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+'@
+    $stdin = [OptimizeDota.ConsoleMode]::GetStdHandle(-10)
+    [uint32]$mode = 0
+    if ([OptimizeDota.ConsoleMode]::GetConsoleMode($stdin, [ref]$mode)) {
+        # снимаем ENABLE_QUICK_EDIT_MODE (0x40), ставим ENABLE_EXTENDED_FLAGS (0x80)
+        $newMode = [uint32](($mode -band 4294967231) -bor 128)
+        [void][OptimizeDota.ConsoleMode]::SetConsoleMode($stdin, $newMode)
+    }
+} catch { }
+
 if (-not (Test-IsAdmin)) {
     Write-Bad 'Нужны права администратора. Запусти start.bat двойным щелчком и нажми «Да» в окне Windows.'
     Read-Host '  Нажми Enter, чтобы закрыть' | Out-Null
@@ -16,8 +33,10 @@ function Invoke-SystemRepair {
     Write-Info 'Займёт 15–40 минут, нужен интернет. Компьютер в это время можно использовать.'
     if (-not (Confirm-Action 'Начать?' $true)) { return }
     Write-Info 'Шаг 1 из 2: DISM восстанавливает хранилище компонентов...'
+    Write-Info 'Дойдя до 100%, DISM может стоять без изменений 5–20 минут — это нормально, окно не закрывай.'
     & "$env:windir\System32\Dism.exe" /Online /Cleanup-Image /RestoreHealth
     Write-Info 'Шаг 2 из 2: SFC проверяет системные файлы...'
+    Write-Info 'Проценты здесь тоже иногда подолгу стоят на месте — просто жди.'
     & "$env:windir\System32\sfc.exe" /scannow
     Write-Ok 'Готово. Если что-то было исправлено — перезагрузи компьютер.'
 }
