@@ -1,0 +1,4 @@
+# Скрипты для Windows храним как есть: с переводами строк CRLF и UTF-8 с BOM
+# (без BOM Windows PowerShell 5.1 ломает русский текст).
+*.ps1 -text
+*.bat -text
